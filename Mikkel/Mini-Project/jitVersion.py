@@ -5,16 +5,12 @@ import time
 
 
 
-@jit
+@jit(nopython=True, nogil=True)
 def jitApproach(width,height,T):
-    x0 = np.empty(width)
-    y0 = np.empty(height)
 
-    for i in range(width):
-        x0[i] = -2 + (i / (width - 1)) * 3
 
-    for j in range(height):
-        y0[j] = -1.5 + (j / (height - 1)) * 3
+    x0 = -2 + (np.arange(width) / (width - 1)) * 3
+    y0 = -1.5 + (np.arange(height) / (height - 1)) * 3
 
     output = np.zeros((height,width))
     for i in range(len(x0)):
@@ -23,7 +19,7 @@ def jitApproach(width,height,T):
             x = 0.0
             y = 0.0
             iterations = 0
-            iterations_max = 1000
+            iterations_max = 100
             while (x*x + y*y <= T*T) and (iterations < iterations_max):
                 x_temp = x*x - y*y + x0[i]
                 y = 2*x*y + y0[j]
@@ -35,17 +31,15 @@ def jitApproach(width,height,T):
     return output
 
 
-width = 1000
-height = 1000
+width = 5000
+height = 5000
 T = 2
-
-
-
 
 start_time = time.time()
 output = jitApproach(width, height, T)
 end_time = time.time()
 print(f'Jit took: {end_time-start_time}')
+print(output.shape)
 
 
 plt.imshow(output, cmap="hot", extent=[-2,1,-1.5,1.5],aspect='auto')

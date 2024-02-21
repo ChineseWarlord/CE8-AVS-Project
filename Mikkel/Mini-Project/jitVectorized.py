@@ -1,10 +1,10 @@
 from tabnanny import verbose
 import numpy as np
 import matplotlib.pyplot as plt
-from numba import jit, vectorize, complex128, float64, bool_
+from numba import jit, vectorize
 import time
 
-@jit(nopython=True)
+@jit(nopython=True, nogil=True)
 def jitTiler(arr, reps):
     n = len(arr)
     m = reps
@@ -15,47 +15,51 @@ def jitTiler(arr, reps):
 
     return tiled
 
-@vectorize(nopython=True)
-def complexCalculator(z, c):
-    res = z**2+c
-    return res
+# @vectorize(nopython=True)
+# def complexCalculator(z, c):
+#     res = z**2+c
+#     return res
 
-@vectorize(nopython=True)
-def complexMatrixMaker(x,y):
-    res = x + 1j * y
-    return res
+# @vectorize(nopython=True)
+# def complexMatrixMaker(x,y):
+#     res = x + 1j * y
+#     return res
 
 @vectorize(nopython=True)
 def matrixAddition(x : np.float64, y: np.bool_) -> np.float64:
     return x + y
 
 
-@jit(nopython=True)
+@jit(nopython=True, nogil=True)
 def jitVectorized(width, height, T):
-    x = np.empty(width)
-    y = np.empty(height)
+    # x = np.empty(width)
+    # y = np.empty(height)
 
-    for i in range(width):
-        x[i] = -2 + (i / (width - 1)) * 3
+    # for i in range(width):
+    #     x[i] = -2 + (i / (width - 1)) * 3
 
-    for j in range(height):
-        y[j] = -1.5 + (j / (height - 1)) * 3
+    # for j in range(height):
+    #     y[j] = -1.5 + (j / (height - 1)) * 3
+
+
+    x = -2 + (np.arange(width) / (width - 1)) * 3
+    y = -1.5 + (np.arange(height) / (height - 1)) * 3
 
     
     x = jitTiler(x, len(y))
     y = jitTiler(y, len(x)).T
 
 
-    c = complexMatrixMaker(x,y)
+    c = x + 1j * y #complexMatrixMaker(x,y)
     
     z = np.zeros_like(c)
     output = np.zeros(c.shape)
 
 
-    for _ in range(1000):
-        z = complexCalculator(z, c)
+    for _ in range(100):
+        z = z**2+c #complexCalculator(z, c)
         mask = np.abs(z) <= T
-        output = matrixAddition(output,mask)
+        output += mask#matrixAddition(output,mask)
         # output += mask
         if not np.any(mask):
             break
@@ -64,12 +68,12 @@ def jitVectorized(width, height, T):
 
 
 
-width = 1000
-height = 1000
+width = 5000
+height = 5000
 T = 2
 
 
-
+# output = jitVectorized(100, 100, T)
 start_time = time.time()
 output = jitVectorized(width, height, T)
 end_time = time.time()

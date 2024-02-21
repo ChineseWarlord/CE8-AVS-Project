@@ -14,7 +14,7 @@ def naiveApproach(width,height,T):
             x = 0.0
             y = 0.0
             iterations = 0
-            iterations_max = 1000
+            iterations_max = 100
             while (x*x + y*y <= T*T) and (iterations < iterations_max):
                 x_temp = x*x - y*y + x0[i]
                 y = 2*x*y + y0[j]
@@ -26,8 +26,8 @@ def naiveApproach(width,height,T):
 
 
 
-width = 100
-height = 100
+width = 5000
+height = 5000
 T = 2
 
 
