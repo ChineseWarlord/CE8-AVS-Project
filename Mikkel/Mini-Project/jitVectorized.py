@@ -25,9 +25,9 @@ def jitTiler(arr, reps):
 #     res = x + 1j * y
 #     return res
 
-@vectorize(nopython=True)
-def matrixAddition(x : np.float64, y: np.bool_) -> np.float64:
-    return x + y
+# @vectorize(nopython=True)
+# def matrixAddition(x : np.float64, y: np.bool_) -> np.float64:
+#     return x + y
 
 
 @jit(nopython=True, nogil=True)
@@ -56,7 +56,7 @@ def jitVectorized(width, height, T):
     output = np.zeros(c.shape)
 
 
-    for _ in range(100):
+    for _ in range(1000):
         z = z**2+c #complexCalculator(z, c)
         mask = np.abs(z) <= T
         output += mask#matrixAddition(output,mask)
