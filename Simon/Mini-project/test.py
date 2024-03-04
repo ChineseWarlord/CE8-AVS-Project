@@ -171,11 +171,13 @@ def ParallelMandelbrot(width, height, img, params):
     print("processes:", P)
     print("chunks",chunks)
     
+    
     # Assigning a chunk to each process
     results = []
     t1 = time.time()
     for chunk_start, chunk_end in chunks:
         results.append(pool.apply_async(MandelbrotChunk, (chunk_start, chunk_end, width, height, params)))
+        
     
     # Combine each image chunk to create full image
     for result, (chunk_start, chunk_end) in zip(results, chunks):
