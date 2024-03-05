@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from numba import jit
 import time
 
 
@@ -15,8 +14,7 @@ def vectorizedApproach(width, height, T):
     z = np.zeros_like(c)
     output = np.zeros(c.shape)
 
-    for i in range(1000):
-        print(f"Progress: {i+1}/{1000}", end='\r')
+    for i in range(100):
         z = z**2 + c
         mask = np.abs(z) <= T
         output += mask
