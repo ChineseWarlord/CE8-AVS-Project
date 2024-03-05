@@ -21,13 +21,11 @@ class sensortower:
         self.country_XPath = '//*[@id="mainContent"]/div[1]/div/div[2]/div/div[3]/div/div/div/div/div[2]/button'
         self.country_button_XPath = '//*[@id="mainContent"]/div[1]/div/div[2]/div/div[3]/div/div/div/div/div[2]/button'
         self.country_input_XPath = '//*[@id=":rf:"]'
-        self.country_listbox_XPath = '//*[@id=":rf:-listbox"]'  # headless
-        self.category_XPath = (
-            '//*[@id="mainContent"]/div[1]/div/div[2]/div/div[4]/div/div'
-        )
-        self.category_button_XPath = (
-            '//*[@id="mainContent"]/div[1]/div/div[2]/div/div[4]/div/div'
-        )
+        #self.country_listbox_XPath = '//*[@id=":rf:-listbox"]'  
+        self.country_listbox_XPath = '//*[@id=":r7:-listbox"]'  # headless
+        # self.country_listbox_XPath = '//*[@id=":r7:"]'
+        self.category_XPath = '//*[@id="mainContent"]/div[1]/div/div[2]/div/div[4]/div/div'
+        self.category_button_XPath = '//*[@id="mainContent"]/div[1]/div/div[2]/div/div[4]/div/div'
         self.category_input_XPath = ""
         self.subcat1_XPath = '//*[@id="menu-"]/div[3]/ul/li[13]'  # headless
         self.subcat2_XPath = '//*[@id="menu-"]/div[3]/ul/li[35]'  # headless
@@ -40,34 +38,37 @@ class sensortower:
         # self.driver.get(self.url)
         try:
             # Find the button element for the dropdown toggle
-            dropdown_countries = WebDriverWait(self.driver, 10).until(
+            print("here 1")
+            dropdown_countries = WebDriverWait(self.driver, 60).until(
                 EC.element_to_be_clickable((By.XPATH, self.category_button_XPath))
             )
-            dropdown_countries = self.driver.find_element(
-                By.XPATH, self.country_button_XPath
-            )
+            print("here 2")
+            #dropdown_countries = self.driver.find_element(By.XPATH, self.country_button_XPath)
+            dropdown_countries = WebDriverWait(self.driver,60).until(EC.element_to_be_clickable((By.XPATH, self.country_button_XPath)))
             dropdown_countries.click()
+            print("here 3")
 
-            # countries_ul = driver.find_element(By.XPATH, '//*[@id=":r7:-listbox"]')
-            countries_ul = self.driver.find_element(
-                By.XPATH, self.country_listbox_XPath
-            )  # headless
+            countries_ul = driver.find_element(By.XPATH, '//*[@id=":r7:-listbox"]')
+            #countries_ul = self.driver.find_element(By.XPATH, self.country_listbox_XPath)  
+            print("here 4")
 
             # Locate all the <li> elements within the <ul> element
             country_elements = countries_ul.find_elements(By.TAG_NAME, "li")
+            print("here 5")
 
             # Extract country names and populate them into a list
             country_names = [country.text for country in country_elements]
+            print("here 6")
 
             # Print the list of country names (for verification)
             # print("country names:", country_names)
 
             time.sleep(0.1)
-            dropdown_countries = self.driver.find_element(
-                By.XPATH, self.country_button_XPath
-            )
+            print("here 7")
+            dropdown_countries = self.driver.find_element(By.XPATH, self.country_button_XPath)
             dropdown_countries.click()
 
+            print("here 8")
             return country_names
 
         except Exception as e:
@@ -90,18 +91,12 @@ class sensortower:
         dropdown_categories.click()
 
         # Locate the categories dropdown menu
-        categories_menu = self.driver.find_element(
-            By.XPATH, '//*[@id="menu-"]/div[3]/ul'
-        )
+        categories_menu = self.driver.find_element(By.XPATH, '//*[@id="menu-"]/div[3]/ul')
 
         # Locate the subcategory dropdown menu and scroll into view
-        subcategories_menu1 = self.driver.find_element(
-            By.XPATH, '//*[@id="menu-"]/div[3]/ul/li[13]'
-        )  # headless
+        subcategories_menu1 = self.driver.find_element(By.XPATH, '//*[@id="menu-"]/div[3]/ul/li[13]')  # headless
         # subcategories_menu1 = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.XPATH,  '//*[@id="menu-"]/div[3]/ul/li[13]')))
-        self.driver.execute_script(
-            "arguments[0].scrollIntoView();", subcategories_menu1
-        )
+        self.driver.execute_script("arguments[0].scrollIntoView();", subcategories_menu1)
         subcategories_menu1.click()
 
         # Locate the 2nd subcategory dropdown menu and scroll into view
@@ -109,17 +104,13 @@ class sensortower:
         subcategories_menu2 = WebDriverWait(self.driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, '//*[@id="menu-"]/div[3]/ul/li[35]'))
         )  # headless
-        self.driver.execute_script(
-            "arguments[0].scrollIntoView();", subcategories_menu2
-        )
+        self.driver.execute_script("arguments[0].scrollIntoView();", subcategories_menu2)
         subcategories_menu2.click()
 
         category_elements = categories_menu.find_elements(By.TAG_NAME, "li")
 
         # Print the list of categories (for verification)
-        category_list = [
-            category.text for category in category_elements if category.text.strip()
-        ]
+        category_list = [category.text for category in category_elements if category.text.strip()]
         # print("categories:", category_list)
 
         return category_elements
@@ -154,8 +145,7 @@ class sensortower:
         self.driver.implicitly_wait(100)
 
         countries = self.get_country()
-        for country in countries:
-            print(country)
+        print(countries)
 
         # Shutdown chromium driver
         self.driver.quit()
