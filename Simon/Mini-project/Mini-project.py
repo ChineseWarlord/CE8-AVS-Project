@@ -8,16 +8,16 @@ Description: This script contains multiple implementations of different Mandelbr
 
 # %% [markdown]
 # # Mini-Project Numerical Scientific Computing
-# 
+#
 # 1. one or more updated versions of your previous code (naive, numpy or multiprocessing) where you investigate the achievable gain from using other data types, e.g., numpy.float32 instead of numpy.float64, etc. Please include execution time results for the original and optimized code.
 # 2. Dask-version of the mandelbrot algorithm with execution time results for:
 #    multi-core execution on a single computer. Compare the results to your normal numpy vectorized implementation.
 #    cluster execution, either on strato cluster or another type of job-server/workstation (for example with own laptop+desktop computers or 2 or more laptops in group room).
-# 
+#
 
 # %% [markdown]
 # # Importing libraries
-# 
+#
 
 # %%
 # Importing libraries
@@ -32,44 +32,50 @@ from tqdm import tqdm
 from numba import jit
 import numpy as np
 import cv2 as cv
+import warnings
 import timeit
+import coiled
 import time
+
+# Settings the warnings to be ignored
+warnings.filterwarnings("ignore")
 
 # %% [markdown]
 # # Naive algorithm for computing Mandelbrot set
-# 
+#
 
 # %% [markdown]
 # ##### Naive Mandelbrot Algorithm
-# 
+#
+
 
 # %%
-def NaiveMandelbrot(width:np.uint8, height:np.uint8, img:np.ndarray, params:List[float]) -> np.ndarray:
+def NaiveMandelbrot(width: np.uint8, height: np.uint8, img: np.ndarray, params: List[float]) -> np.ndarray:
     """Naive implementation of the Mandelbrot Set Algorithm based on the pseudocode from `https://en.wikipedia.org/wiki/Mandelbrot_set`.
-    
-    The function calculates a set of points in the complex-plane (converted to the real plane) which forms a fractal. 
-    The x and y locations of each point are used as starting values in a repeating, or iterating calculation. 
-    The result of each iteration is used as the starting values for the next. 
-    The values are checked during each iteration to see whether they have reached a critical "escape" condition, or "bailout". 
+
+    The function calculates a set of points in the complex-plane (converted to the real plane) which forms a fractal.
+    The x and y locations of each point are used as starting values in a repeating, or iterating calculation.
+    The result of each iteration is used as the starting values for the next.
+    The values are checked during each iteration to see whether they have reached a critical "escape" condition, or "bailout".
     If that condition is reached, the calculation is stopped, the pixel is drawn, and the next x, y point is examined
 
 
     Args:
-        width (np.uint8): 
+        width (np.uint8):
                 Width of the image.
-        height (np.uint8): 
+        height (np.uint8):
                 Height of the image.
-        img (np.ndarray): 
+        img (np.ndarray):
             Empty (zeroed) numpy array serving as image placeholder.
-        params (List[float]): 
+        params (List[float]):
             List containing multiple parameters such as the min-max real and imaginary parts, max number of iterations, and threshold.
             Must be a: `List[float, float, float, float, float, float]`.
 
     Returns:
-        np.ndarray: 
+        np.ndarray:
             Returns the Mandelbrot Set.
     """
-    
+
     # Pseudocode from wikipedia: https://en.wikipedia.org/wiki/Mandelbrot_set
     min_real, max_real, min_imaginary, max_imaginary, max_iter, T = params
 
@@ -109,31 +115,33 @@ def NaiveMandelbrot(width:np.uint8, height:np.uint8, img:np.ndarray, params:List
 
     return img
 
+
 # %% [markdown]
 # # Mandelbrot algorithm using Numpy vectorization
-# 
+#
 
 # %% [markdown]
 # Performing vectorization on the naive Mandelbrot Algorithm implementation
-# 
+#
+
 
 # %%
-def VectorizedMandelbrot(width:np.uint8, height:np.uint8, img:np.ndarray, params:List[float]) -> np.ndarray:
+def VectorizedMandelbrot(width: np.uint8, height: np.uint8, img: np.ndarray, params: List[float]) -> np.ndarray:
     """Similar to the naive implementation but instead its vectorized.
 
     Args:
-        width (np.uint8): 
+        width (np.uint8):
                 Width of the image.
-        height (np.uint8): 
+        height (np.uint8):
                 Height of the image.
-        img (np.ndarray): 
+        img (np.ndarray):
             Empty (zeroed) numpy array serving as image placeholder.
-        params (List[float]): 
+        params (List[float]):
             List containing multiple parameters such as the min-max real and imaginary parts, max number of iterations, and threshold.
             Must be a: `List[float, float, float, float, float, float]`.
 
     Returns:
-        np.ndarray: 
+        np.ndarray:
             Returns the Mandelbrot Set.
     """
     min_real, max_real, min_imaginary, max_imaginary, max_iter, T = params
@@ -145,7 +153,7 @@ def VectorizedMandelbrot(width:np.uint8, height:np.uint8, img:np.ndarray, params
 
     # Initialize z as 0's, iter, and mask arrays
     z = np.zeros_like(c, dtype=np.complex128)
-    iter = np.zeros(c.shape, dtype=np.int32)
+    iter = np.zeros(c.shape, dtype=np.uint8)
     mask = np.full(c.shape, True, dtype=bool)
 
     # Using logical mask to check for divergence or escaped points
@@ -155,92 +163,122 @@ def VectorizedMandelbrot(width:np.uint8, height:np.uint8, img:np.ndarray, params
         mask = np.logical_and(mask, abs(z) < T)
         iter[mask] = i
 
-    img[:, :] = iter
+        # Early check for divergence - if yes break
+        if np.any(mask) == False:
+            break
+
+    # img[:, :] = iter
+
     print(f"Execution time: {time.time() - t1:.2f}s")
 
-    return img
+    return iter
+
 
 # %% [markdown]
 # ##### Dask vectorized version
 
+
 # %%
-def DaskVectorizedMandelbrot(c, *params):
+def DaskVectorizedMandelbrot(c: np.ndarray, *params: List[float]) -> np.ndarray:
     """Similar to the naive implementation but instead its a dask vectorized-version.
     width:np.uint8, height:np.uint8, img:np.ndarray,
     Args:
-        width (np.uint8): 
-                Width of the image.
-        height (np.uint8): 
-                Height of the image.
-        img (np.ndarray): 
-            Empty (zeroed) numpy array serving as image placeholder.
-        params (List[float]): 
-            List containing multiple parameters such as the min-max real and imaginary parts, max number of iterations, and threshold.
-            Must be a: `List[float, float, float, float, float, float]`.
+        c (np.complex128):
+            Meshgrid of complex numbers.
+        params (List[float]):
+            List containing max iterations and threshold.
 
     Returns:
-        np.ndarray: 
+        np.ndarray:
             Returns the Mandelbrot Set.
     """
     max_iter, T = params
-    
+
     z = np.zeros_like(c)
+    iter = np.zeros(c.shape, dtype=np.uint8)
     mask = np.full(c.shape, True, dtype=bool)
-    iter = np.zeros(c.shape)
-    
+
     for i in range(0, int(max_iter)):
-        iter[mask] = i
         z[mask] = z[mask] * z[mask] + c[mask]
-        mask[np.abs(z) > 2] = False
-        
+        mask = np.logical_and(mask, abs(z) < T)
+        iter[mask] = i
+
+        # Early check for divergence - if yes break
         if np.any(mask) == False:
             break
-        
+
     return iter
-        
 
-    # Initialize z as 0's, iter, and mask arrays
-    #z = da.zeros_like(c, dtype=np.complex128)
-    #iter = da.zeros(c.shape, dtype=np.int32)
-    #mask = da.ones(c.shape, dtype=bool)
 
-    # Using logical mask to check for divergence or escaped points
-    #t1 = time.time()
-    #for i in tqdm(range(int(max_iter)), total=int(max_iter), desc="Computing Mandelbrot Set"):
-    #    z = z * z + c
-    #    mask = da.logical_and(mask, da.absolute(z) < T)
-    #    iter = da.where(mask, i, iter)
+def runDaskMandelbrot(chunks: List[int]) -> Tuple[np.ndarray, list]:
+    """Runs the dask-vectorized Mandelbrot Set Algorithm.
 
-    #img[:, :] = iter
-    #print(f"Execution time: {time.time() - t1:.2f}s")
+    Args:
+        chunks (List[int]):
+                A list containing chunk sizes.
 
-    #return img
-    #return iter
+    Returns:
+        np.ndarray:
+            Returns the Mandelbrot Set.
+    """
+    # Initialize local cluster and client
+    cluster = LocalCluster(n_workers=6)
+    client = Client(cluster)
+
+    # Access the Dask dashboard
+    client.dashboard_link
+
+    # Creating np arrays for width/height pixels
+    Px = np.linspace(min_real, max_real, width)
+    Py = np.linspace(min_imaginary, max_imaginary, height)
+    c = Px[np.newaxis, :] + 1j * Py[:, np.newaxis]
+
+    # Parameters
+    paramss = [max_iter, T]
+    times = []
+    for chunk in chunks:
+        img_mandel = da.from_array(c, chunks=(chunk, chunk))
+        t = time.time()
+        # img_mandel = DaskVectorizedMandelbrot(width, height, img, params, 1000)
+        img_mandel = img_mandel.map_blocks(DaskVectorizedMandelbrot, *paramss, dtype=complex)
+        img_mandel = img_mandel.compute()
+        t2 = time.time() - t
+        times.append(t2)
+        print("Chunk:", chunk)
+        print(f"Execution time: {t2:.2f}s")
+
+    # Close Dask client and cluster
+    client.close()
+    cluster.close()
+
+    return img_mandel, times
+
 
 # %% [markdown]
 # # Naive Mandelbrot Algorithm using Numba jit
-# 
+#
+
 
 # %%
 @jit(nopython=True, fastmath=True, cache=True)
-def NaiveMandelbrotNumba(width:np.uint8, height:np.uint8, img:np.ndarray, params:List[float], datatype=np.float32) -> np.ndarray:
+def NaiveMandelbrotNumba(width: np.uint8, height: np.uint8, img: np.ndarray, params: List[float], datatype=np.float32) -> np.ndarray:
     """Similar to the naive implementation but instead its using numba jit.
 
     Args:
-        width (np.uint8): 
+        width (np.uint8):
                 Width of the image.
-        height (np.uint8): 
+        height (np.uint8):
                 Height of the image.
-        img (np.ndarray): 
+        img (np.ndarray):
             Empty (zeroed) numpy array serving as image placeholder.
-        params (List[float]): 
+        params (List[float]):
             List containing multiple parameters such as the min-max real and imaginary parts, max number of iterations, and threshold.
             Must be a: `List[float, float, float, float, float, float]`.
         datatype (np.float32):
             Numpy datatype.
 
     Returns:
-        np.ndarray: 
+        np.ndarray:
             Returns the Mandelbrot Set.
     """
     # Pseudocode from wikipedia: https://en.wikipedia.org/wiki/Mandelbrot_set
@@ -282,24 +320,26 @@ def NaiveMandelbrotNumba(width:np.uint8, height:np.uint8, img:np.ndarray, params
 
     return img
 
+
 # %% [markdown]
 # # Parallel Mandelbrot Algorithm
-# 
+#
+
 
 # %%
-def MandelbrotChunk(chunk_start:int, chunk_end:int, width:np.uint8, height:np.uint8, params:List[float]) -> np.ndarray:
+def MandelbrotChunk(chunk_start: int, chunk_end: int, width: np.uint8, height: np.uint8, params: List[float]) -> np.ndarray:
     """Similar to the naive implementation of the Mandelbrot Set Algorithm, but instead iterates through each point based on the chunk starting and ending points.
 
     Args:
-        chunk_start (int): 
+        chunk_start (int):
             The starting chunk in the list of chunks.
-        chunk_end (int): 
+        chunk_end (int):
             The ending chunk in the list of chunks.
-        width (np.uint8): 
+        width (np.uint8):
             The width of the image.
-        height (np.uint8): 
+        height (np.uint8):
             The height of the image.
-        params (List[float]): 
+        params (List[float]):
             List containing multiple parameters such as the min-max real and imaginary parts, max number of iterations, and threshold.
             Must be a: `List[float, float, float, float, float, float, str, int]`.
 
@@ -354,11 +394,11 @@ def chunking(check: str, num_processes: int, height: np.uint8) -> list:
     """Generates `n` number of chunks based on either equal or dynamic chunking.
 
     Args:
-        check (str): 
+        check (str):
             A conditional string used to select the type of chunking scheme.
-        num_processes (int): 
+        num_processes (int):
             The total number of processes.
-        height (np.uint8): 
+        height (np.uint8):
         The height of the image.
 
     Returns:
@@ -398,22 +438,22 @@ def chunking(check: str, num_processes: int, height: np.uint8) -> list:
         print("Error! *Wrong parameter*")
 
 
-def ParallelMandelbrot(width:np.uint8, height:np.uint8, img:np.ndarray, params:Tuple[float,float,float,float,float,float,str,int]) -> np.ndarray:
+def ParallelMandelbrot(width: np.uint8, height: np.uint8, img: np.ndarray, params: Tuple[float, float, float, float, float, float, str, int]) -> np.ndarray:
     """Initializes a multiprocessing pool which distributes the computation of the Mandelbrot Set to `n` number of processes.
 
     Args:
-        width (np.uint8): 
+        width (np.uint8):
                 Width of the image.
-        height (np.uint8): 
+        height (np.uint8):
                 Height of the image.
-        img (np.ndarray): 
+        img (np.ndarray):
             Empty (zeroed) numpy array serving as image placeholder.
-        params (Tuple[float,float,float,float,float,float,str,int]): 
+        params (Tuple[float,float,float,float,float,float,str,int]):
             List containing multiple parameters such as the min-max real and imaginary parts, max number of iterations, and threshold.
             Must be a list type: `List[float, float, float, float, float, float, str, int]`.
 
     Returns:
-        np.ndarray: 
+        np.ndarray:
             Returns the Mandelbrot Set.
     """
     *_, check, P = params
@@ -446,49 +486,50 @@ def ParallelMandelbrot(width:np.uint8, height:np.uint8, img:np.ndarray, params:T
 
     return img, t
 
-def runParallel(width:np.uint8, height:np.uint8, img:np.ndarray, params:List[float]) -> np.ndarray:
+
+def runParallel(width: np.uint8, height: np.uint8, img: np.ndarray, params: List[float]) -> np.ndarray:
     """Runs the Mandelbrot Set Algorithm in parallel.
 
     Args:
-        width (np.uint8): 
+        width (np.uint8):
                 Width of the image.
-        height (np.uint8): 
+        height (np.uint8):
                 Height of the image.
-        img (np.ndarray): 
+        img (np.ndarray):
             Empty (zeroed) numpy array serving as image placeholder.
-        params (List[float]): 
+        params (List[float]):
             List containing multiple parameters such as the min-max real and imaginary parts, max number of iterations, and threshold.
             Must be a: `List[float, float, float, float, float, float]`.
 
     Returns:
-        np.ndarray: 
+        np.ndarray:
             Returns the Mandelbrot Set.
     """
     min_real, max_real, min_imaginary, max_imaginary, max_iter, T = params
     processes = mp.cpu_count()
     P_values = range(1, processes + 1)
     times1 = []
-    #times2 = []
+    # times2 = []
     for i in range(processes):
         params = [min_real, max_real, min_imaginary, max_imaginary, max_iter, T, "equal", i + 1]
         img1, t = ParallelMandelbrot(width, height, img, params)
         times1.append(t)
 
-        #params = [min_real, max_real, min_imaginary, max_imaginary, max_iter, T, "dynamic", i + 1]
-        #img2, t = ParallelMandelbrot(width, height, img, params)
-        #times2.append(t)
+        # params = [min_real, max_real, min_imaginary, max_imaginary, max_iter, T, "dynamic", i + 1]
+        # img2, t = ParallelMandelbrot(width, height, img, params)
+        # times2.append(t)
 
     print(f"\nChunking: Equal\nTotal Time: {np.array(times1).sum()}")
-    #print(f"\nChunking: Dynamic\nTotal Time: {np.array(times2).sum()}")
+    # print(f"\nChunking: Dynamic\nTotal Time: {np.array(times2).sum()}")
 
-    #displayMandelbrot(img1, params, "Parallel\n- equal chunking", "hot")
-    #displayMandelbrot(img2, params, "Parallel\n- dynamic chunking", "hot")
+    # displayMandelbrot(img1, params, "Parallel\n- equal chunking", "hot")
+    # displayMandelbrot(img2, params, "Parallel\n- dynamic chunking", "hot")
 
     plot_results(P_values, times1, "equal")
-    #plot_results(P_values, times2, "dynamic")
+    # plot_results(P_values, times2, "dynamic")
 
 
-def plot_results(P_values:int, time_values:List[float], chunk:str) -> None:
+def plot_results(P_values: int, time_values: List[float], chunk: str) -> None:
     """Plots the execution time and speedup over the number of `n` number of processes.
 
     Args:
@@ -514,25 +555,27 @@ def plot_results(P_values:int, time_values:List[float], chunk:str) -> None:
     plt.tight_layout()
     plt.show()
 
+
 # %% [markdown]
 # ##### Using multiprocessing + numba jit
-# 
+#
+
 
 # %%
 @jit(nopython=True, fastmath=True, cache=True)
-def MandelbrotChunkJIT(chunk_start:int, chunk_end:int, width:np.uint8, height:np.uint8, params:List[float]) -> np.ndarray:
+def MandelbrotChunkJIT(chunk_start: int, chunk_end: int, width: np.uint8, height: np.uint8, params: List[float]) -> np.ndarray:
     """Similar to the naive implementation of the Mandelbrot Set Algorithm, but instead iterates through each point based on the chunk starting and ending points.
 
     Args:
-        chunk_start (int): 
+        chunk_start (int):
             The starting chunk in the list of chunks.
-        chunk_end (int): 
+        chunk_end (int):
             The ending chunk in the list of chunks.
-        width (np.uint8): 
+        width (np.uint8):
             The width of the image.
-        height (np.uint8): 
+        height (np.uint8):
             The height of the image.
-        params (List[float]): 
+        params (List[float]):
             List containing multiple parameters such as the min-max real and imaginary parts, max number of iterations, and threshold.
             Must be a: `List[float, float, float, float, float, float, str, int]`.
 
@@ -583,22 +626,22 @@ def MandelbrotChunkJIT(chunk_start:int, chunk_end:int, width:np.uint8, height:np
     return chunk
 
 
-def ParallelMandelbrotJIT(width:np.uint8, height:np.uint8, img:np.ndarray, params:Tuple[float,float,float,float,float,float,str,int]) -> np.ndarray:
+def ParallelMandelbrotJIT(width: np.uint8, height: np.uint8, img: np.ndarray, params: Tuple[float, float, float, float, float, float, str, int]) -> np.ndarray:
     """Initializes a multiprocessing pool which distributes the computation of the Mandelbrot Set to `n` number of processes.
 
     Args:
-        width (np.uint8): 
+        width (np.uint8):
                 Width of the image.
-        height (np.uint8): 
+        height (np.uint8):
                 Height of the image.
-        img (np.ndarray): 
+        img (np.ndarray):
             Empty (zeroed) numpy array serving as image placeholder.
-        params (Tuple[float,float,float,float,float,float,str,int]): 
+        params (Tuple[float,float,float,float,float,float,str,int]):
             List containing multiple parameters such as the min-max real and imaginary parts, max number of iterations, and threshold.
             Must be a list type: `List[float, float, float, float, float, float, str, int]`.
 
     Returns:
-        np.ndarray: 
+        np.ndarray:
             Returns the Mandelbrot Set.
     """
     *_, check, P = params
@@ -631,22 +674,23 @@ def ParallelMandelbrotJIT(width:np.uint8, height:np.uint8, img:np.ndarray, param
 
     return img, t
 
-def runParallelJIT(width:np.uint8, height:np.uint8, img:np.ndarray, params:List[float]) -> np.ndarray:
+
+def runParallelJIT(width: np.uint8, height: np.uint8, img: np.ndarray, params: List[float]) -> np.ndarray:
     """Runs the Mandelbrot Set Algorithm in parallel.
 
     Args:
-        width (np.uint8): 
+        width (np.uint8):
                 Width of the image.
-        height (np.uint8): 
+        height (np.uint8):
                 Height of the image.
-        img (np.ndarray): 
+        img (np.ndarray):
             Empty (zeroed) numpy array serving as image placeholder.
-        params (List[float]): 
+        params (List[float]):
             List containing multiple parameters such as the min-max real and imaginary parts, max number of iterations, and threshold.
             Must be a: `List[float, float, float, float, float, float]`.
 
     Returns:
-        np.ndarray: 
+        np.ndarray:
             Returns the Mandelbrot Set.
     """
     min_real, max_real, min_imaginary, max_imaginary, max_iter, T = params
@@ -656,39 +700,42 @@ def runParallelJIT(width:np.uint8, height:np.uint8, img:np.ndarray, params:List[
     times2 = []
     for i in range(processes):
         params = [min_real, max_real, min_imaginary, max_imaginary, max_iter, T, "equal", i + 1]
-        img1, t = ParallelMandelbrotJIT(width, height, img, params) # JIT
+        img1, t = ParallelMandelbrotJIT(width, height, img, params)  # JIT
         times1.append(t)
 
         params = [min_real, max_real, min_imaginary, max_imaginary, max_iter, T, "dynamic", i + 1]
-        img2, t = ParallelMandelbrotJIT(width, height, img, params) # JIT
+        img2, t = ParallelMandelbrotJIT(width, height, img, params)  # JIT
         times2.append(t)
 
     print(f"\nChunking: Equal\nTotal Time: {np.array(times1).sum()}")
     print(f"\nChunking: Dynamic\nTotal Time: {np.array(times2).sum()}")
 
-    #displayMandelbrot(img1, params, "Parallel\n- equal chunking", "hot")
-    #displayMandelbrot(img2, params, "Parallel\n- dynamic chunking", "hot")
+    # displayMandelbrot(img1, params, "Parallel\n- equal chunking", "hot")
+    # displayMandelbrot(img2, params, "Parallel\n- dynamic chunking", "hot")
 
     plot_results(P_values, times1, "equal")
     plot_results(P_values, times2, "dynamic")
 
+
 # %% [markdown]
 # # Displaying the Mandelbrot set in the complex plane
-# 
+#
 
 # %% [markdown]
 # ##### Function to display Mandelbrot
-# 
+#
+
 
 # %%
-def displayMandelbrot(img:np.ndarray, params:List[float], title:str, cmap:Union[str, None] = None) -> None:
+def displayMandelbrot(img: np.ndarray, params: List[float], title: str, cmap: Union[str, None] = None) -> None:
     min_real, max_real, min_imaginary, max_imaginary, *_ = params
     plt.imshow(img, cmap=cmap, extent=(min_real, max_real, min_imaginary, max_imaginary))
     plt.xlabel("Real(c)")
     plt.ylabel("Imaginary(c)")
     plt.title("Mandelbrot Set\n- " + f"{title}")
     plt.show()
-    
+
+
 def datatypes_plot(datatypes, time_values):
     plt.figure(figsize=(12, 6))
     plt.title(f"Performance Analysis of Mandelbrot Algorithm Datatypes", fontsize=16)
@@ -696,18 +743,32 @@ def datatypes_plot(datatypes, time_values):
     plt.xlabel("Datatypes")
     plt.ylabel("Execution Time [s]")
     plt.show()
-    
-def chunks_plot(datatypes, time_values):
-    plt.figure(figsize=(12, 6))
-    plt.title(f"Performance Analysis of Dask Mandelbrot Algorithm", fontsize=16)
+
+
+def chunks_plot(datatypes, time_values, baseline):
+    plt.figure(figsize=(12, 8))
+    plt.subplot(2, 1, 1)
+    plt.title(f"Performance Analysis\nDask Vectorized VS Vectorized", fontsize=16)
     plt.plot(datatypes, time_values, marker="o", color="b")
     plt.xlabel("Chunks")
     plt.ylabel("Execution Time [s]")
+    plt.grid()
+
+    speedup = [baseline / t for t in time_values]
+
+    plt.subplot(2, 1, 2)
+    plt.title(f"Speedup")
+    plt.plot(datatypes, speedup, marker="o", color="r")
+    plt.xlabel("Chunks")
+    plt.ylabel("Speedup")
+    plt.grid()
+    plt.tight_layout()
     plt.show()
+
 
 # %% [markdown]
 # # Defining image and complex variables
-# 
+#
 
 # %%
 # Defining image size
@@ -731,79 +792,52 @@ params = [min_real, max_real, min_imaginary, max_imaginary, max_iter, T]
 
 # %% [markdown]
 # ### Running algorithms
-# 
+#
 
 # %%
 if __name__ == "__main__":
     # Naive Mandelbrot Algorithm
-    #print(f"\n- Naive Mandelbrot Algorithm -")
-    #t = time.time()
-    #img_mandel = NaiveMandelbrot(width, height, img, params)
-    #print(f"Execution time: {time.time() - t:.2f}s")
-    #displayMandelbrot(img_mandel, params, "Naive", "hot")
+    # print(f"\n- Naive Mandelbrot Algorithm -")
+    # t = time.time()
+    # img_mandel = NaiveMandelbrot(width, height, img, params)
+    # print(f"Execution time: {time.time() - t:.2f}s")
+    # displayMandelbrot(img_mandel, params, "Naive", "hot")
 
     # Vectorized Mandelbrot Algorithm
-    #print(f"\n- Vectorized Mandelbrot Algorithm -")
-    #t = time.time()
-    #img_mandel = VectorizedMandelbrot(width, height, img, params)
-    #print(f"Execution time: {time.time() - t:.2f}s")
+    print(f"\n- Vectorized Mandelbrot Algorithm -")
+    t = time.time()
+    img_mandel = VectorizedMandelbrot(width, height, img, params)
+    baseline = time.time() - t
+    print(f"Execution time: {baseline:.2f}s")
     #displayMandelbrot(img_mandel, params, "Vectorized", "hot")
-    
+
     print(f"\n- Dask Vectorized Mandelbrot Algorithm -")
-    # Initialize local cluster and client
-    cluster = LocalCluster(n_workers=6)
-    client = Client(cluster)
-    
-    # Creating np arrays for width/height pixels
-    Px = np.linspace(min_real, max_real, width)
-    Py = np.linspace(min_imaginary, max_imaginary, height)
-    c = Px[np.newaxis, :] + 1j * Py[:, np.newaxis]
-    
-    # Parameters
-    params = [max_iter, T]
-    chunks = [50,60,70,80,90,100,110,120,130,140,150,160,170,180,190,200]
-    times = []
-    for chunk in chunks:
-        img_mandel = da.from_array(c, chunks=(chunk,chunk))
-        t = time.time()
-        #img_mandel = DaskVectorizedMandelbrot(width, height, img, params, 1000)
-        img_mandel = img_mandel.map_blocks(DaskVectorizedMandelbrot, *params, dtype=complex)
-        img_mandel = img_mandel.compute()
-        t2 = time.time() - t
-        times.append(t2)
-        print(f"Execution time: {t2:.2f}s")
-    
-    # Close Dask client and cluster
-    client.close()
-    cluster.close()
+    chunks = [50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200, 250, 300, 350, 400, 450, 500]
+    img_mandel, times = runDaskMandelbrot(chunks)
     chunks = [str(chunk) for chunk in chunks]
-    chunks_plot(chunks, times)
-    
-    params = [min_real, max_real, min_imaginary, max_imaginary, max_iter, T]
-    displayMandelbrot(img_mandel, params, "Dask Vectorized", "hot")
-    
+    chunks_plot(chunks, times, baseline)
+    #displayMandelbrot(img_mandel, params, "Dask Vectorized", "hot")
+
     # Numba jit Optimized Mandelbrot Algorithm
-    #print(f"\n- Numba Mandelbrot Algorithm -")
-    #t = time.time()
-    #img_mandel1 = NaiveMandelbrotNumba(width, height, img, params)
-    #print(f"'warmup' Execution time: {time.time() - t:.2f}s")
-    #displayMandelbrot(img_mandel1, params, "Numba", "hot")
-    
-    #datatypes = [np.float32, np.float64]
-    #times = []
-    #print(f"\n- Numba Mandelbrot Algorithm -")
-    #for datatype in datatypes:
-    #    t = time.time()
-    #    img_mandel1 = NaiveMandelbrotNumba(width, height, img, params, datatype)
-    #    t2 = time.time() - t
-    #    print(f"'compiled' Execution time: {t2:.2f}s")
-    #    times.append(t2)
-    
+    # print(f"\n- Numba Mandelbrot Algorithm -")
+    # t = time.time()
+    # img_mandel1 = NaiveMandelbrotNumba(width, height, img, params)
+    # print(f"'warmup' Execution time: {time.time() - t:.2f}s")
+    # displayMandelbrot(img_mandel1, params, "Numba", "hot")
+
+    datatypes = [np.float32, np.float64]
+    times = []
+    print(f"\n- Numba Mandelbrot Algorithm -")
+    for datatype in datatypes:
+        t = time.time()
+        img_mandel1 = NaiveMandelbrotNumba(width, height, img, params, datatype)
+        t2 = time.time() - t
+        print(f"'compiled' Execution time: {t2:.2f}s")
+        times.append(t2)
+
     #datatypes_plot(["np.float32", "np.float64"], times)
-    #displayMandelbrot(img_mandel1, params, "Numba", "hot")
+    # displayMandelbrot(img_mandel1, params, "Numba", "hot")
 
     # Parallel Mandelbrot Algorithm
-    #runParallel(width, height, img, params)
-    #runParallelJIT(width, height, img, params)
-
-
+    # runParallel(width, height, img, params)
+    # runParallelJIT(width, height, img, params)
