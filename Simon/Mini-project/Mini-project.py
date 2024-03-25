@@ -25,7 +25,9 @@ import matplotlib.pyplot as plt
 import multiprocessing as mp
 
 # from tqdm.notebook import tqdm
+from dask.distributed import Client, LocalCluster
 from typing import List, Tuple, Dict, Union
+import dask.array as da
 from tqdm import tqdm
 from numba import jit
 import numpy as np
@@ -159,14 +161,12 @@ def VectorizedMandelbrot(width:np.uint8, height:np.uint8, img:np.ndarray, params
     return img
 
 # %% [markdown]
-# # Naive Mandelbrot Algorithm using Numba jit
-# 
+# ##### Dask vectorized version
 
 # %%
-@jit(nopython=True, fastmath=True, cache=True)
-def NaiveMandelbrotNumba(width:np.uint8, height:np.uint8, img:np.ndarray, params:List[float]) -> np.ndarray:
-    """Similar to the naive implementation but instead its using numba jit.
-
+def DaskVectorizedMandelbrot(c, *params):
+    """Similar to the naive implementation but instead its a dask vectorized-version.
+    width:np.uint8, height:np.uint8, img:np.ndarray,
     Args:
         width (np.uint8): 
                 Width of the image.
@@ -182,6 +182,67 @@ def NaiveMandelbrotNumba(width:np.uint8, height:np.uint8, img:np.ndarray, params
         np.ndarray: 
             Returns the Mandelbrot Set.
     """
+    max_iter, T = params
+    
+    z = np.zeros_like(c)
+    mask = np.full(c.shape, True, dtype=bool)
+    iter = np.zeros(c.shape)
+    
+    for i in range(0, int(max_iter)):
+        iter[mask] = i
+        z[mask] = z[mask] * z[mask] + c[mask]
+        mask[np.abs(z) > 2] = False
+        
+        if np.any(mask) == False:
+            break
+        
+    return iter
+        
+
+    # Initialize z as 0's, iter, and mask arrays
+    #z = da.zeros_like(c, dtype=np.complex128)
+    #iter = da.zeros(c.shape, dtype=np.int32)
+    #mask = da.ones(c.shape, dtype=bool)
+
+    # Using logical mask to check for divergence or escaped points
+    #t1 = time.time()
+    #for i in tqdm(range(int(max_iter)), total=int(max_iter), desc="Computing Mandelbrot Set"):
+    #    z = z * z + c
+    #    mask = da.logical_and(mask, da.absolute(z) < T)
+    #    iter = da.where(mask, i, iter)
+
+    #img[:, :] = iter
+    #print(f"Execution time: {time.time() - t1:.2f}s")
+
+    #return img
+    #return iter
+
+# %% [markdown]
+# # Naive Mandelbrot Algorithm using Numba jit
+# 
+
+# %%
+@jit(nopython=True, fastmath=True, cache=True)
+def NaiveMandelbrotNumba(width:np.uint8, height:np.uint8, img:np.ndarray, params:List[float], datatype=np.float32) -> np.ndarray:
+    """Similar to the naive implementation but instead its using numba jit.
+
+    Args:
+        width (np.uint8): 
+                Width of the image.
+        height (np.uint8): 
+                Height of the image.
+        img (np.ndarray): 
+            Empty (zeroed) numpy array serving as image placeholder.
+        params (List[float]): 
+            List containing multiple parameters such as the min-max real and imaginary parts, max number of iterations, and threshold.
+            Must be a: `List[float, float, float, float, float, float]`.
+        datatype (np.float32):
+            Numpy datatype.
+
+    Returns:
+        np.ndarray: 
+            Returns the Mandelbrot Set.
+    """
     # Pseudocode from wikipedia: https://en.wikipedia.org/wiki/Mandelbrot_set
     min_real, max_real, min_imaginary, max_imaginary, max_iter, T = params
 
@@ -189,12 +250,12 @@ def NaiveMandelbrotNumba(width:np.uint8, height:np.uint8, img:np.ndarray, params
     for Px in range(width):
         for Py in range(height):
             # Map pixel coordinates to real and imaginary parts of c
-            c_Real = min_real + (max_real - min_real) * (Px / width)
-            c_Imgy = min_imaginary + (max_imaginary - min_imaginary) * (Py / height)
+            c_Real = datatype(min_real + (max_real - min_real) * (Px / width))
+            c_Imgy = datatype(min_imaginary + (max_imaginary - min_imaginary) * (Py / height))
 
             # Initialize z as 0
-            z_Real = 0
-            z_Imgy = 0
+            z_Real = datatype(0)
+            z_Imgy = datatype(0)
 
             # Initialize iterations
             iter = 0
@@ -407,24 +468,24 @@ def runParallel(width:np.uint8, height:np.uint8, img:np.ndarray, params:List[flo
     processes = mp.cpu_count()
     P_values = range(1, processes + 1)
     times1 = []
-    times2 = []
+    #times2 = []
     for i in range(processes):
         params = [min_real, max_real, min_imaginary, max_imaginary, max_iter, T, "equal", i + 1]
         img1, t = ParallelMandelbrot(width, height, img, params)
         times1.append(t)
 
-        params = [min_real, max_real, min_imaginary, max_imaginary, max_iter, T, "dynamic", i + 1]
-        img2, t = ParallelMandelbrot(width, height, img, params)
-        times2.append(t)
+        #params = [min_real, max_real, min_imaginary, max_imaginary, max_iter, T, "dynamic", i + 1]
+        #img2, t = ParallelMandelbrot(width, height, img, params)
+        #times2.append(t)
 
     print(f"\nChunking: Equal\nTotal Time: {np.array(times1).sum()}")
-    print(f"\nChunking: Dynamic\nTotal Time: {np.array(times2).sum()}")
+    #print(f"\nChunking: Dynamic\nTotal Time: {np.array(times2).sum()}")
 
     #displayMandelbrot(img1, params, "Parallel\n- equal chunking", "hot")
     #displayMandelbrot(img2, params, "Parallel\n- dynamic chunking", "hot")
 
     plot_results(P_values, times1, "equal")
-    plot_results(P_values, times2, "dynamic")
+    #plot_results(P_values, times2, "dynamic")
 
 
 def plot_results(P_values:int, time_values:List[float], chunk:str) -> None:
@@ -627,6 +688,14 @@ def displayMandelbrot(img:np.ndarray, params:List[float], title:str, cmap:Union[
     plt.ylabel("Imaginary(c)")
     plt.title("Mandelbrot Set\n- " + f"{title}")
     plt.show()
+    
+def datatypes_plot(datatypes, time_values):
+    plt.figure(figsize=(12, 6))
+    plt.title(f"Performance Analysis of Mandelbrot Algorithm Datatypes", fontsize=16)
+    plt.plot(datatypes, time_values, marker="o", color="b")
+    plt.xlabel("Datatypes")
+    plt.ylabel("Execution Time [s]")
+    plt.show()
 
 # %% [markdown]
 # # Defining image and complex variables
@@ -666,48 +735,61 @@ if __name__ == "__main__":
     #displayMandelbrot(img_mandel, params, "Naive", "hot")
 
     # Vectorized Mandelbrot Algorithm
-    print(f"\n- Vectorized Mandelbrot Algorithm -")
-    t = time.time()
-    img_mandel = VectorizedMandelbrot(width, height, img, params)
-    print(f"Execution time: {time.time() - t:.2f}s")
+    #print(f"\n- Vectorized Mandelbrot Algorithm -")
+    #t = time.time()
+    #img_mandel = VectorizedMandelbrot(width, height, img, params)
+    #print(f"Execution time: {time.time() - t:.2f}s")
     #displayMandelbrot(img_mandel, params, "Vectorized", "hot")
-
-    # Numba jit Optimized Mandelbrot Algorithm
-    print(f"\n- Numba Mandelbrot Algorithm -")
+    
+    print(f"\n- Dask Vectorized Mandelbrot Algorithm -")
+    # Initialize local cluster and client
+    cluster = LocalCluster()
+    client = Client(cluster)
+    
+    # Creating np arrays for width/height pixels
+    Px = np.linspace(min_real, max_real, width)
+    Py = np.linspace(min_imaginary, max_imaginary, height)
+    c = Px[np.newaxis, :] + 1j * Py[:, np.newaxis]
+    
+    # Parameters
+    params = [max_iter, T]
+    
+    img_mandel = da.from_array(c, chunks=(1000,1000))
     t = time.time()
-    img_mandel1 = NaiveMandelbrotNumba(width, height, img, params)
-    print(f"'warmup' Execution time: {time.time() - t:.2f}s")
+    #img_mandel = DaskVectorizedMandelbrot(width, height, img, params, 1000)
+    img_mandel = img_mandel.map_blocks(DaskVectorizedMandelbrot, *params, dtype=complex)
+    img_mandel = img_mandel.compute()
+    print(f"Execution time: {time.time() - t:.2f}s")
+    
+    # Close Dask client and cluster
+    client.close()
+    cluster.close()
+    
+    params = [min_real, max_real, min_imaginary, max_imaginary, max_iter, T]
+    displayMandelbrot(img_mandel, params, "Dask Vectorized", "hot")
+    
+    # Numba jit Optimized Mandelbrot Algorithm
+    #print(f"\n- Numba Mandelbrot Algorithm -")
+    #t = time.time()
+    #img_mandel1 = NaiveMandelbrotNumba(width, height, img, params)
+    #print(f"'warmup' Execution time: {time.time() - t:.2f}s")
     #displayMandelbrot(img_mandel1, params, "Numba", "hot")
     
-    print(f"\n- Numba Mandelbrot Algorithm -")
-    t = time.time()
-    img_mandel1 = NaiveMandelbrotNumba(width, height, img, params)
-    print(f"'compiled' Execution time: {time.time() - t:.2f}s")
+    #datatypes = [np.float32, np.float64]
+    #times = []
+    #print(f"\n- Numba Mandelbrot Algorithm -")
+    #for datatype in datatypes:
+    #    t = time.time()
+    #    img_mandel1 = NaiveMandelbrotNumba(width, height, img, params, datatype)
+    #    t2 = time.time() - t
+    #    print(f"'compiled' Execution time: {t2:.2f}s")
+    #    times.append(t2)
+    
+    #datatypes_plot(["np.float32", "np.float64"], times)
     #displayMandelbrot(img_mandel1, params, "Numba", "hot")
 
     # Parallel Mandelbrot Algorithm
-    runParallel(width, height, img, params)
+    #runParallel(width, height, img, params)
     #runParallelJIT(width, height, img, params)
-    #processes = mp.cpu_count()
-    #P_values = range(1, processes + 1)
-    #times1 = []
-    #times2 = []
-    #for i in range(processes):
-    #    params = [min_real, max_real, min_imaginary, max_imaginary, max_iter, T, "equal", i + 1]
-    #    img1, t = ParallelMandelbrot(width, height, img, params)
-    #    times1.append(t)
-
-    #    params = [min_real, max_real, min_imaginary, max_imaginary, max_iter, T, "dynamic", i + 1]
-    #    img2, t = ParallelMandelbrot(width, height, img, params)
-    #    times2.append(t)
-
-    #print(f"\nChunking: Equal\nTotal Time: {np.array(times1).sum()}")
-    #print(f"\nChunking: Dynamic\nTotal Time: {np.array(times2).sum()}")
-
-    #displayMandelbrot(img1, params, "Parallel\n- equal chunking", "hot")
-    #displayMandelbrot(img2, params, "Parallel\n- dynamic chunking", "hot")
-
-    #plot_results(P_values, times1, "equal")
-    #plot_results(P_values, times2, "dynamic")
 
 
