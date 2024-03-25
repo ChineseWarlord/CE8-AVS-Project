@@ -696,6 +696,14 @@ def datatypes_plot(datatypes, time_values):
     plt.xlabel("Datatypes")
     plt.ylabel("Execution Time [s]")
     plt.show()
+    
+def chunks_plot(datatypes, time_values):
+    plt.figure(figsize=(12, 6))
+    plt.title(f"Performance Analysis of Dask Mandelbrot Algorithm", fontsize=16)
+    plt.plot(datatypes, time_values, marker="o", color="b")
+    plt.xlabel("Chunks")
+    plt.ylabel("Execution Time [s]")
+    plt.show()
 
 # %% [markdown]
 # # Defining image and complex variables
@@ -743,7 +751,7 @@ if __name__ == "__main__":
     
     print(f"\n- Dask Vectorized Mandelbrot Algorithm -")
     # Initialize local cluster and client
-    cluster = LocalCluster()
+    cluster = LocalCluster(n_workers=6)
     client = Client(cluster)
     
     # Creating np arrays for width/height pixels
@@ -753,17 +761,23 @@ if __name__ == "__main__":
     
     # Parameters
     params = [max_iter, T]
-    
-    img_mandel = da.from_array(c, chunks=(1000,1000))
-    t = time.time()
-    #img_mandel = DaskVectorizedMandelbrot(width, height, img, params, 1000)
-    img_mandel = img_mandel.map_blocks(DaskVectorizedMandelbrot, *params, dtype=complex)
-    img_mandel = img_mandel.compute()
-    print(f"Execution time: {time.time() - t:.2f}s")
+    chunks = [50,60,70,80,90,100,110,120,130,140,150,160,170,180,190,200]
+    times = []
+    for chunk in chunks:
+        img_mandel = da.from_array(c, chunks=(chunk,chunk))
+        t = time.time()
+        #img_mandel = DaskVectorizedMandelbrot(width, height, img, params, 1000)
+        img_mandel = img_mandel.map_blocks(DaskVectorizedMandelbrot, *params, dtype=complex)
+        img_mandel = img_mandel.compute()
+        t2 = time.time() - t
+        times.append(t2)
+        print(f"Execution time: {t2:.2f}s")
     
     # Close Dask client and cluster
     client.close()
     cluster.close()
+    chunks = [str(chunk) for chunk in chunks]
+    chunks_plot(chunks, times)
     
     params = [min_real, max_real, min_imaginary, max_imaginary, max_iter, T]
     displayMandelbrot(img_mandel, params, "Dask Vectorized", "hot")
